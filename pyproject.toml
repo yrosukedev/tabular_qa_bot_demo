@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "tabular-qa-llm"
+version = "0.1.0"
+description = ""
+authors = ["shrek wang <shrekwang1@163.com>"]
+readme = "README.md"
+packages = [{include = "tabular_qa_llm"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.10"
+numba = "0.56.4"
+farm-haystack = {extras = ["all-gpu"], version = "^1.15.1"}
+
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^2.0.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
