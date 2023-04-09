@@ -83,5 +83,30 @@ class TestFlatTableCell(unittest.TestCase):
     #     print(f"1st output table: \n{output_tables[0]}")
 
 
+class TestGenerateStandardizeQA(unittest.TestCase):
+
+    def test_qa_generation(self):
+
+        input = pd.DataFrame([
+            ["10元/公斤", "绿色"],
+            ["5元/公斤", "紫色"]
+        ], columns=["价格", "颜色"], index=["苹果", "葡萄"])
+
+        expected_output = pd.DataFrame([
+            ["苹果的价格是什么？", "10元/公斤"],
+            ["葡萄的价格是什么？", "5元/公斤"],
+            ["苹果的颜色是什么？", "绿色"],
+            ["葡萄的颜色是什么？", "紫色"]
+        ], columns=["问题", "预期答案"])
+
+        actual_output = preprocess.generate_standardize_qa_from_table(
+            table=input,
+            question_template="$index_label的$column_label是什么？",
+            columns=["问题", "预期答案"])
+
+        self.assertTrue(data_frame_matcher(expected_output, actual_output),
+                        "generated questions and answers are not matched.")
+
+
 if __name__ == "__main__":
     unittest.main()
