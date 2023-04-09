@@ -1,5 +1,5 @@
 import unittest
-import elastic_retriever
+import mini_table
 import pandas as pd
 from typing import List, TypeVar, Callable, Union
 
@@ -71,7 +71,7 @@ class TestFlatTableCell(unittest.TestCase):
             pd.DataFrame(["Apple", "green"], columns=["Color"]),
             pd.DataFrame(["Grep", "purple"], columns=["Color"]),
         ]
-        actual_outputs = elastic_retriever.flat_table_cell_to_table(input)
+        actual_outputs = mini_table.flat_table_cell_to_table(input)
         self.assertDataFrameListEqual(
             expected_outputs, actual_outputs, msg="data frame list should be equal")
 
