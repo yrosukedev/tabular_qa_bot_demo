@@ -66,14 +66,36 @@ class TestFlatTableCell(unittest.TestCase):
         ], columns=["Price", "Color"], index=["Apple", "Grep"])
 
         expected_outputs = [
-            pd.DataFrame(["Apple", "10$/KG"], columns=["Price"]),
-            pd.DataFrame(["Grep", "5$/KG"], columns=["Price"]),
-            pd.DataFrame(["Apple", "green"], columns=["Color"]),
-            pd.DataFrame(["Grep", "purple"], columns=["Color"]),
+            pd.DataFrame([["Apple", "10$/KG"]], columns=["Fruit", "Price"]),
+            pd.DataFrame([["Grep", "5$/KG"]], columns=["Fruit", "Price"]),
+            pd.DataFrame([["Apple", "green"]], columns=["Fruit", "Color"]),
+            pd.DataFrame([["Grep", "purple"]], columns=["Fruit", "Color"]),
         ]
-        actual_outputs = preprocess.flat_table_cell_to_table(input)
+        actual_outputs = preprocess.flat_table_cell_to_table(
+            table=input, entity_label="Fruit")
         self.assertDataFrameListEqual(
             expected_outputs, actual_outputs, msg="data frame list should be equal")
+
+    def test_answer_from_mini_table(self):
+        input = pd.DataFrame([
+            ["10$/KG", "green"],
+            ["5$/KG", "purple"]
+        ], columns=["Price", "Color"], index=["Apple", "Grep"])
+
+        actual_outputs = preprocess.flat_table_cell_to_table(input, "Furit")
+        self.assertEqual(
+            "10$/KG", preprocess.answer_from_mini_table(actual_outputs[0]))
+
+    def test_context_from_mini_table(self):
+        input = pd.DataFrame([
+            ["10$/KG", "green"],
+            ["5$/KG", "purple"]
+        ], columns=["Price", "Color"], index=["Apple", "Grep"])
+
+        actual_outputs = preprocess.flat_table_cell_to_table(input, "Furit")
+
+        self.assertEqual("(Apple, Price)",
+                         preprocess.context_from_mini_table(actual_outputs[0]))
 
     # def test_flat_real_table(self):
     #     doc_path = "~/Downloads/ryosuke_dev_qa_1.csv"
