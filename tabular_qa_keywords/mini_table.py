@@ -1,22 +1,18 @@
-import pandas as pd
-
-from typing import List
-
 import logging
 
+from haystack.document_stores import ElasticsearchDocumentStore
+from haystack.nodes.retriever import BM25Retriever
 from haystack import Document
 
-import preprocess
+import pandas as pd
 
-from haystack.document_stores import ElasticsearchDocumentStore
-
-from haystack.nodes.retriever import EmbeddingRetriever
+from tabular_qa_semantic_search import preprocess
 
 
 class MiniTableQA:
     document_index: str
     document_store: ElasticsearchDocumentStore
-    retriever: EmbeddingRetriever
+    retriever: BM25Retriever
 
     def __init__(self, document_index: str):
         self.setupLogging()
@@ -30,29 +26,34 @@ class MiniTableQA:
         logging.getLogger("haystack").info(
             "✅ succeeds to connect to Elasticsearch")
 
-        self.retriever = EmbeddingRetriever(
-            document_store=self.document_store, embedding_model="deepset/all-mpnet-base-v2-table")
+        self.retriever = BM25Retriever(document_store=self.document_store)
 
     def setupLogging(self) -> None:
         logging.basicConfig(
             format="%(levelname)s - %(name)s -  %(message)s", level=logging.WARNING)
         logging.getLogger("haystack").setLevel(logging.INFO)
 
-    def index_data_from_table(self, doc_path: str, entity_label: str) -> None:
+    def index_data_from_table(self, doc_path: str) -> None:
 
         # indexing data
         logging.getLogger("haystack").info(
             "🚧 start to read table as documents")
         df = pd.read_csv(doc_path, index_col=0)
         df.fillna(value="", inplace=True)  # Minimal cleaning
-        tables = preprocess.flat_table_cell_to_table(
-            table=df, entity_label=entity_label)
-        documents = [Document(content=table, content_type="table")
-                     for table in tables]
+        questions_and_answers = preprocess.generate_standardize_qa_from_table(
+            table=df, question_template="$index_label, $column_label", columns=["question1", "answer"])
+        questions_and_answers["answer"] = questions_and_answers["answer"].apply(
+            lambda x: str(x))
+        records = questions_and_answers.to_dict(orient="records")
+        documents = [Document.from_dict(
+            dict=r, field_map={"question1": "content"}) for r in records]
         logging.getLogger("haystack").info(
             "✅ succeeds to read table as documents")
 
-        # add the table to the DocumentStore
+        for d in documents:
+            logging.getLogger("haystack").debug(d.to_dict())
+
+        # add the table to the DocumentSto
         logging.getLogger("haystack").info(
             "🚧 start to write documents to Elasticsearch")
         self.document_store.write_documents(
@@ -60,20 +61,15 @@ class MiniTableQA:
         logging.getLogger("haystack").info(
             "✅ succeeds to write documents to Elasticsearch")
 
-        # update embeddings
-        logging.getLogger("haystack").info("🚧 start to update embeddings")
-        self.document_store.update_embeddings(retriever=self.retriever)
-        logging.getLogger("haystack").info("✅ succeeds to update embeddings")
-
-    def query_table(self, query: str) -> None:
+    def query(self, query: str) -> None:
         logging.getLogger("haystack").info(
             "🚧 start to retrieve relavant tables with Retriever")
-        retrived_tables = self.retriever.retrieve(
+        retrived_docs = self.retriever.retrieve(
             query, index=self.document_index, top_k=5)
         logging.getLogger("haystack").info(
             "✅ succeeds to retrieve relavant tables with Retriever")
-        for table in retrived_tables:
-            print(table)
+        for doc in retrived_docs:
+            print(doc)
 
     def evaluate_table(self, doc_path: str) -> pd.DataFrame:
         logging.getLogger("haystack").info(
@@ -86,10 +82,10 @@ class MiniTableQA:
         for content in std_qa_table.itertuples():
             question = content[1]
             expected_answer = content[2]
-            retrived_mini_table = self.retriever.retrieve(
+            retrived_doc = self.retriever.retrieve(
                 query=question, index=self.document_index, top_k=1)[0]
-            actual_answer = self.answer_from_mini_table(retrived_mini_table)
-            answer_context = self.context_from_mini_table(retrived_mini_table)
+            actual_answer = self.answer_from_retrieved_doc(retrived_doc)
+            answer_context = self.context_from_retrieved_doc(retrived_doc)
 
             logging.getLogger("haystack").info(
                 f"✅ evalution item created, question: {question}, expected answer: {expected_answer}, actual answer: {actual_answer}, answer context: {answer_context}")
@@ -103,26 +99,23 @@ class MiniTableQA:
 
         return pd.DataFrame(result, columns=["问题", "预期回答", "实际回答", "回答上下文"])
 
-    def answer_from_mini_table(self, table: Document) -> str:
-        if isinstance(table.content, pd.DataFrame):
-            return preprocess.answer_from_mini_table(table=table.content)
+    def answer_from_retrieved_doc(self, doc: Document) -> str:
+        return doc.meta.get("answer", "")
+
+    def context_from_retrieved_doc(self, table: Document) -> str:
+        if isinstance(table.content, str):
+            return table.content
         else:
             return ""
-
-    def context_from_mini_table(self, table: Document) -> str:
-        if isinstance(table.content, pd.DataFrame):
-            return preprocess.context_from_mini_table(table=table.content)
-        else:
-            return ""
-
 
 if __name__ == "__main__":
-    query = "护眼台灯的库存是多少"
     doc_path = "~/Downloads/ryosuke_dev_qa_3.csv"
-    document_index = "table_qa.keywords.ryosuke_dev_qa_3.v1"
+    document_index = "table_qa_keywords.minitable.ryosuke_dev_qa_3.v1"
+    query = "护眼台灯的库存是多少"
+
     qa = MiniTableQA(document_index=document_index)
-    # qa.index_data_from_table(doc_path=doc_path, entity_label="货品")
-    # qa.query_table(query=query)
+    # qa.index_data_from_table(doc_path=doc_path)
+    # qa.query(query)
     evaluation_result = qa.evaluate_table(
         doc_path=doc_path)
-    evaluation_result.to_csv("~/Desktop/tabular_qa_semantic_search.eval.ryosuke_dev_qa_3.csv")
+    evaluation_result.to_csv("~/Desktop/tabular_qa_minitable.eval.ryosuke_dev_qa_3.csv")
